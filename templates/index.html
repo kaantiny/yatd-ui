@@ -847,6 +847,36 @@
             overflow: visible;
         }
 
+        .tree-toggle {
+            width: 16px;
+            height: 16px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            font-size: 10px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-top: 1px;
+            flex-shrink: 0;
+            z-index: 2;
+        }
+
+        .tree-toggle:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .tree-toggle-spacer {
+            width: 16px;
+            height: 16px;
+            margin-top: 1px;
+            flex-shrink: 0;
+        }
+
         .tree-guides {
             position: absolute;
             top: 0;
@@ -970,6 +1000,7 @@
         let showHelp = false;
         let nextTasks = [];
         let treeMode = true;
+        const collapsedTreeNodesByProject = new Map();
 
         // DOM elements
         const projectsEl = document.getElementById('projects');
@@ -1044,6 +1075,7 @@
         function buildDependencyTree(taskList) {
             const taskMap = new Map();
             const childrenMap = new Map();
+            const collapsed = collapsedTreeNodesByProject.get(currentProject) || new Set();
 
             // Index all tasks
             taskList.forEach(t => {
@@ -1075,16 +1107,23 @@
                 if (visited.has(task.id)) return;
                 visited.add(task.id);
 
+                const children = (childrenMap.get(task.id) || []).filter(c => !visited.has(c.id));
+                const hasChildren = children.length > 0;
+
                 result.push({
                     task: task,
                     depth: depth,
                     isLast: isLast,
+                    hasChildren: hasChildren,
+                    isCollapsed: collapsed.has(task.id),
                     guides: activeGuides.slice() // which depth levels have a continuing vertical line
                 });
 
-                const children = (childrenMap.get(task.id) || []).filter(c => !visited.has(c.id));
-                const newGuides = depth === 0 ? [] : activeGuides.concat(isLast ? [] : [depth]);
+                if (collapsed.has(task.id)) {
+                    return;
+                }
 
+                const newGuides = depth === 0 ? [] : activeGuides.concat(isLast ? [] : [depth]);
                 children.forEach((child, idx) => {
                     dfs(child, depth + 1, newGuides, idx === children.length - 1);
                 });
@@ -1102,6 +1141,23 @@
             });
 
             return result;
+        }
+
+        function getCollapsedSet(projectName) {
+            if (!collapsedTreeNodesByProject.has(projectName)) {
+                collapsedTreeNodesByProject.set(projectName, new Set());
+            }
+            return collapsedTreeNodesByProject.get(projectName);
+        }
+
+        function toggleTreeNode(taskId) {
+            const collapsed = getCollapsedSet(currentProject);
+            if (collapsed.has(taskId)) {
+                collapsed.delete(taskId);
+            } else {
+                collapsed.add(taskId);
+            }
+            renderTasks();
         }
 
         // Toggle tree mode
@@ -1190,8 +1246,13 @@
                     const nextNode = treeNodes[i + 1];
                     const beforeGapClass = (nextNode && nextNode.depth === 0 && i > 0) ? ' tree-root-gap-before' : '';
 
+                    const toggleHtml = node.hasChildren
+                        ? '<button class="tree-toggle" data-toggle-id="' + t.id + '" title="' + (node.isCollapsed ? 'Expand' : 'Collapse') + '">' + (node.isCollapsed ? '▸' : '▾') + '</button>'
+                        : '<div class="tree-toggle-spacer"></div>';
+
                     return '<div class="task-item tree-node' + rootGapClass + beforeGapClass + ' ' + (i === selectedIndex ? 'selected' : '') + '" data-index="' + i + '" data-id="' + t.id + '" style="' + paddingLeft + '">' +
                         (guidesHtml ? '<div class="tree-guides">' + guidesHtml + '</div>' : '') +
+                        toggleHtml +
                         '<div class="task-status ' + t.status + '"></div>' +
                         '<div class="task-content">' +
                         '<div class="task-title">' + escapeHtml(t.title) + '</div>' +
@@ -1225,10 +1286,20 @@
 
             // Add click handlers
             taskListEl.querySelectorAll('.task-item').forEach(el => {
-                el.addEventListener('click', () => {
+                el.addEventListener('click', (e) => {
+                    if (e.target.closest('.tree-toggle')) {
+                        return;
+                    }
                     selectedIndex = parseInt(el.dataset.index);
                     renderTasks();
                     loadTaskDetail(el.dataset.id);
+                });
+            });
+
+            taskListEl.querySelectorAll('.tree-toggle').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleTreeNode(el.dataset.toggleId);
                 });
             });
 
