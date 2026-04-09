@@ -239,20 +239,55 @@
             align-items: center;
         }
 
+        .search-wrap {
+            position: relative;
+            width: 300px;
+        }
+
         .search-box {
             background: var(--bg-tertiary);
             border: 1px solid var(--border);
             border-radius: 4px;
-            padding: 6px 12px;
+            padding: 6px 34px 6px 12px;
             color: var(--text);
             font-family: inherit;
             font-size: 12px;
-            width: 300px;
+            width: 100%;
             outline: none;
         }
 
         .search-box:focus {
             border-color: var(--accent);
+        }
+
+        .search-clear-btn {
+            position: absolute;
+            top: 50%;
+            right: 6px;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 12px;
+            line-height: 1;
+            cursor: pointer;
+            display: none;
+        }
+
+        .search-wrap.has-value .search-clear-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .search-clear-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--bg-secondary);
         }
 
         .filter-bar {
@@ -410,8 +445,29 @@
         }
 
         .detail-header {
+            position: relative;
             padding: 16px;
+            padding-right: 52px;
             border-bottom: 1px solid var(--border);
+        }
+
+        .detail-close-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 28px;
+            height: 28px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .detail-close-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         .detail-id {
@@ -743,7 +799,7 @@
                 gap: 8px;
             }
 
-            .search-box {
+            .search-wrap {
                 width: 100%;
                 order: 1;
             }
@@ -1013,7 +1069,10 @@
             <div class="toolbar">
                 <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
                 <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Toggle project sidebar">Projects</button>
-                <input type="text" class="search-box" id="search" placeholder="Search tasks... (/)" />
+                <div class="search-wrap" id="searchWrap">
+                    <input type="text" class="search-box" id="search" placeholder="Search tasks... (/)" />
+                    <button class="search-clear-btn" id="searchClearBtn" title="Clear search (x)">x</button>
+                </div>
                 <div class="filter-bar">
                     <button class="filter-btn active" data-filter="all">all</button>
                     <button class="filter-btn" data-filter="open">open</button>
@@ -1038,8 +1097,10 @@
         <kbd>j</kbd>/<kbd>k</kbd> or <kbd>↑</kbd>/<kbd>↓</kbd> - Navigate<br>
         <kbd>Enter</kbd> - View task details<br>
         <kbd>z</kbd> - Toggle selected task open/closed<br>
-        <kbd>Esc</kbd> - Close detail panel<br>
+        <kbd>Esc</kbd> - Blur search (when focused)<br>
+        <kbd>\</kbd> - Close detail panel<br>
         <kbd>/</kbd> - Focus search<br>
+        <kbd>x</kbd> - Clear search<br>
         <kbd>o</kbd> - Show open only<br>
         <kbd>c</kbd> - Show closed only<br>
         <kbd>a</kbd> - Show all<br>
@@ -1070,6 +1131,8 @@
         const taskListEl = document.getElementById('taskList');
         const taskDetailEl = document.getElementById('taskDetail');
         const searchEl = document.getElementById('search');
+        const searchWrapEl = document.getElementById('searchWrap');
+        const searchClearBtn = document.getElementById('searchClearBtn');
         const shortcutHintEl = document.getElementById('shortcutHint');
         const appEl = document.querySelector('.app');
         const sidebarEl = document.getElementById('sidebar');
@@ -1446,6 +1509,7 @@
 
             let html = '<button class="detail-back-btn" id="detailBackBtn">← Back to tasks</button>';
             html += '<div class="detail-header">';
+            html += '<button class="detail-close-btn" id="detailCloseBtn" title="Close details (\\)">✕</button>';
             html += '<div class="detail-id">' + task.id + '</div>';
             html += '<div class="detail-title">' + escapeHtml(task.title) + '</div>';
             html += '<div class="detail-props">';
@@ -1685,6 +1749,22 @@
             return isSlash && (event.metaKey || event.ctrlKey);
         }
 
+        function updateSearchUI() {
+            if (!searchWrapEl) return;
+            searchWrapEl.classList.toggle('has-value', !!searchQuery);
+        }
+
+        function clearSearch(options = {}) {
+            const { focus = false } = options;
+            searchQuery = '';
+            searchEl.value = '';
+            updateSearchUI();
+            applyFilter({ keepSelection: true });
+            if (focus) {
+                searchEl.focus();
+            }
+        }
+
         function syncVisibleDetailWithSelection() {
             if (!taskDetailEl.classList.contains('visible')) return;
             const selectedTask = filteredTasks[selectedIndex];
@@ -1729,10 +1809,8 @@
 
             if (e.target === searchEl) {
                 if (e.key === 'Escape') {
+                    e.preventDefault();
                     searchEl.blur();
-                    searchQuery = '';
-                    searchEl.value = '';
-                    applyFilter();
                     return;
                 }
                 return;
@@ -1759,12 +1837,20 @@
                     e.preventDefault();
                     toggleSelectedTaskStatus().catch(err => console.error(err));
                     break;
+                case '\\':
+                    e.preventDefault();
+                    taskDetailEl.classList.remove('visible');
+                    break;
                 case 'Escape':
                     taskDetailEl.classList.remove('visible');
                     break;
                 case '/':
                     e.preventDefault();
                     searchEl.focus();
+                    break;
+                case 'x':
+                    e.preventDefault();
+                    clearSearch();
                     break;
                 case 'o':
                     currentFilter = 'open';
@@ -1797,8 +1883,15 @@
         // Search input
         searchEl.addEventListener('input', (e) => {
             searchQuery = e.target.value;
-            applyFilter();
+            updateSearchUI();
+            applyFilter({ keepSelection: true });
         });
+
+        if (searchClearBtn) {
+            searchClearBtn.addEventListener('click', () => {
+                clearSearch({ focus: true });
+            });
+        }
 
         // Filter buttons
         function updateFilterButtons() {
@@ -1875,7 +1968,7 @@
 
         // Delegate click for back button and dependency links in detail panel
         taskDetailEl.addEventListener('click', (e) => {
-            if (e.target.id === 'detailBackBtn') {
+            if (e.target.id === 'detailBackBtn' || e.target.id === 'detailCloseBtn') {
                 taskDetailEl.classList.remove('visible');
                 return;
             }
@@ -1917,6 +2010,7 @@
         }
 
         // Initial load
+        updateSearchUI();
         loadProjects();
     </script>
 </body>
