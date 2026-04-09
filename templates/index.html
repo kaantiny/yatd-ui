@@ -972,7 +972,7 @@
                         '<span class="task-tag">' + nextTask.id + '</span>' +
                         (nextTaskFull.priority ? '<span class="task-tag priority-' + nextTaskFull.priority + '">' + nextTaskFull.priority + '</span>' : '') +
                         (nextTaskFull.effort ? '<span class="task-tag">' + nextTaskFull.effort + '</span>' : '') +
-                        '<span class="task-tag" style="color: #e3b341;">#' + nextTask.rank + ' · Score: ' + nextTask.score.toFixed(1) + '</span>' +
+                        (nextTask.rank && nextTask.score ? '<span class="task-tag" style="color: #e3b341;">#' + nextTask.rank + ' · Score: ' + nextTask.score.toFixed(1) + '</span>' : '') +
                         '</div>' +
                         '</div>' +
                         '</div>';
@@ -1372,12 +1372,14 @@
             if (e.target.classList.contains('dep-link')) {
                 e.preventDefault();
                 const depId = e.target.dataset.id;
-                // Find the task in current tasks list
-                const depTask = tasks.find(t => t.id === depId);
-                if (depTask) {
+                // Find the task in filtered tasks list and update selection
+                const depIndex = filteredTasks.findIndex(t => t.id === depId);
+                if (depIndex !== -1) {
+                    selectedIndex = depIndex;
+                    renderTasks();
                     loadTaskDetail(depId);
                 } else {
-                    // Task not in current list, fetch it
+                    // Task not in current filtered list, fetch it
                     fetch('/api/task?project=' + encodeURIComponent(currentProject) + '&id=' + encodeURIComponent(depId))
                         .then(r => r.json())
                         .then(t => renderTaskDetail(t));
