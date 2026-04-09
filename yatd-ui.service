@@ -1,0 +1,15 @@
+[Unit]
+Description=yatd UI - Web interface for td todo manager
+After=network.target
+
+[Service]
+Type=simple
+User=exedev
+WorkingDirectory=/home/exedev/yatd-ui
+Environment="PORT=8000"
+ExecStart=/home/exedev/yatd-ui/yatd-ui
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
