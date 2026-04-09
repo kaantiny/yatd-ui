@@ -36,6 +36,7 @@ type Project struct {
 }
 
 var tdPath string
+var tdHome string
 
 func init() {
 	// Try to find td binary
@@ -43,11 +44,22 @@ func init() {
 	if _, err := os.Stat(tdPath); err != nil {
 		tdPath = "td"
 	}
+
+	// Resolve td home directory
+	if home := os.Getenv("TD_HOME"); home != "" {
+		tdHome = home
+	} else {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			homeDir = "."
+		}
+		tdHome = homeDir
+	}
 }
 
 func runTD(args ...string) ([]byte, error) {
 	cmd := exec.Command(tdPath, args...)
-	cmd.Dir = "/home/exedev"
+	cmd.Dir = tdHome
 	return cmd.Output()
 }
 
