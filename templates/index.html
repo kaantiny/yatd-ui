@@ -1681,6 +1681,26 @@
             return isSlash && (event.metaKey || event.ctrlKey);
         }
 
+        function syncVisibleDetailWithSelection() {
+            if (!taskDetailEl.classList.contains('visible')) return;
+            const selectedTask = filteredTasks[selectedIndex];
+            if (!selectedTask) return;
+
+            const detailIdEl = taskDetailEl.querySelector('.detail-id');
+            const visibleDetailId = detailIdEl ? detailIdEl.textContent : '';
+            if (visibleDetailId !== selectedTask.id) {
+                loadTaskDetail(selectedTask.id);
+            }
+        }
+
+        function moveSelection(delta) {
+            const nextIndex = selectedIndex + delta;
+            if (nextIndex < 0 || nextIndex >= filteredTasks.length) return;
+            selectedIndex = nextIndex;
+            renderTasks();
+            syncVisibleDetailWithSelection();
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (isSidebarToggleShortcut(e)) {
@@ -1704,18 +1724,12 @@
                 case 'j':
                 case 'ArrowDown':
                     e.preventDefault();
-                    if (selectedIndex < filteredTasks.length - 1) {
-                        selectedIndex++;
-                        renderTasks();
-                    }
+                    moveSelection(1);
                     break;
                 case 'k':
                 case 'ArrowUp':
                     e.preventDefault();
-                    if (selectedIndex > 0) {
-                        selectedIndex--;
-                        renderTasks();
-                    }
+                    moveSelection(-1);
                     break;
                 case 'Enter':
                     e.preventDefault();
