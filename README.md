@@ -2,6 +2,8 @@
 
 A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaantiny/yatd) - the CLI todo manager.
 
+![yatd UI screenshot](screenshot.png)
+
 ## Features
 
 - **Project browsing** - View all your yatd projects
