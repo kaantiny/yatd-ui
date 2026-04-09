@@ -940,6 +940,28 @@
         .filter-btn.tree-btn {
             margin-left: 4px;
         }
+
+        .tree-node-parent .task-title {
+            font-weight: 600;
+        }
+
+        .tree-node-collapsed {
+            background: linear-gradient(90deg, rgba(88, 166, 255, 0.10) 0%, rgba(88, 166, 255, 0.03) 100%);
+            border-color: rgba(88, 166, 255, 0.45);
+        }
+
+        .tree-node-collapsed .tree-toggle {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: rgba(88, 166, 255, 0.15);
+        }
+
+        .tree-node-collapsed .task-title::after {
+            content: ' (collapsed)';
+            color: var(--accent);
+            font-weight: 500;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -1260,7 +1282,9 @@
                         ? '<button class="tree-toggle" data-toggle-id="' + t.id + '" title="' + (node.isCollapsed ? 'Expand' : 'Collapse') + '">' + (node.isCollapsed ? '▸' : '▾') + '</button>'
                         : '<div class="tree-toggle-spacer"></div>';
 
-                    return '<div class="task-item tree-node' + rootGapClass + beforeGapClass + ' ' + (i === selectedIndex ? 'selected' : '') + '" data-index="' + i + '" data-id="' + t.id + '" style="' + paddingLeft + '">' +
+                    const treeStateClass = (node.hasChildren ? ' tree-node-parent' : '') + (node.isCollapsed ? ' tree-node-collapsed' : '');
+
+                    return '<div class="task-item tree-node' + rootGapClass + beforeGapClass + treeStateClass + ' ' + (i === selectedIndex ? 'selected' : '') + '" data-index="' + i + '" data-id="' + t.id + '" style="' + paddingLeft + '">' +
                         (guidesHtml ? '<div class="tree-guides">' + guidesHtml + '</div>' : '') +
                         toggleHtml +
                         '<div class="task-status ' + t.status + '"></div>' +
