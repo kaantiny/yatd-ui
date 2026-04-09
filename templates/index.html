@@ -896,6 +896,14 @@
             background: rgba(139, 148, 158, 0.35);
         }
 
+        .tree-guide-vert-down {
+            position: absolute;
+            top: 50%;
+            bottom: 0;
+            width: 1px;
+            background: rgba(139, 148, 158, 0.35);
+        }
+
         /* Elbow: vertical from top to center, then horizontal to content */
         .tree-guide-elbow {
             position: absolute;
@@ -1233,9 +1241,9 @@
                         const elbowX = baseLeft + (depth - 1) * guideStep;
                         guidesHtml += '<div class="tree-guide-elbow" style="left:' + elbowX + 'px;height:50%"></div>';
 
-                        // If not last child, continue vertical line for this depth
+                        // If not last child, continue vertical line for this depth only below elbow
                         if (!node.isLast) {
-                            guidesHtml += '<div class="tree-guide-vert" style="left:' + elbowX + 'px"></div>';
+                            guidesHtml += '<div class="tree-guide-vert-down" style="left:' + elbowX + 'px"></div>';
                         }
                     }
 
