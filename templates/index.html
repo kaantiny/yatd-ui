@@ -867,7 +867,7 @@
                     <button class="filter-btn active" data-filter="all">all</button>
                     <button class="filter-btn" data-filter="open">open</button>
                     <button class="filter-btn" data-filter="closed">closed</button>
-                    <button class="filter-btn tree-btn" id="treeModeBtn">tree</button>
+                    <button class="filter-btn tree-btn active" id="treeModeBtn">tree</button>
                 </div>
             </div>
             <div class="content">
@@ -907,7 +907,7 @@
         let searchQuery = '';
         let showHelp = false;
         let nextTasks = [];
-        let treeMode = false;
+        let treeMode = true;
 
         // DOM elements
         const projectsEl = document.getElementById('projects');
