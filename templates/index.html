@@ -1405,9 +1405,7 @@
                     if (e.target.closest('.tree-toggle')) {
                         return;
                     }
-                    selectedIndex = parseInt(el.dataset.index);
-                    renderTasks();
-                    loadTaskDetail(el.dataset.id);
+                    focusTaskAtIndex(parseInt(el.dataset.index), { openDetail: true });
                 });
             });
 
@@ -1422,7 +1420,13 @@
             const nextTaskEl = taskListEl.querySelector('.next-task-item');
             if (nextTaskEl) {
                 nextTaskEl.addEventListener('click', () => {
-                    loadTaskDetail(nextTaskEl.dataset.id);
+                    const nextId = nextTaskEl.dataset.id;
+                    const nextIndex = filteredTasks.findIndex(t => t.id === nextId);
+                    if (nextIndex !== -1) {
+                        focusTaskAtIndex(nextIndex, { openDetail: true });
+                    } else {
+                        loadTaskDetail(nextId);
+                    }
                 });
             }
 
@@ -1693,12 +1697,26 @@
             }
         }
 
-        function moveSelection(delta) {
-            const nextIndex = selectedIndex + delta;
-            if (nextIndex < 0 || nextIndex >= filteredTasks.length) return;
-            selectedIndex = nextIndex;
+        function focusTaskAtIndex(index, options = {}) {
+            const { openDetail = false } = options;
+            if (index < 0 || index >= filteredTasks.length) return;
+
+            selectedIndex = index;
             renderTasks();
+
+            if (openDetail) {
+                const selectedTask = filteredTasks[selectedIndex];
+                if (selectedTask) {
+                    loadTaskDetail(selectedTask.id);
+                }
+                return;
+            }
+
             syncVisibleDetailWithSelection();
+        }
+
+        function moveSelection(delta) {
+            focusTaskAtIndex(selectedIndex + delta);
         }
 
         // Keyboard shortcuts
@@ -1867,9 +1885,7 @@
                 // Find the task in filtered tasks list and update selection
                 const depIndex = filteredTasks.findIndex(t => t.id === depId);
                 if (depIndex !== -1) {
-                    selectedIndex = depIndex;
-                    renderTasks();
-                    loadTaskDetail(depId);
+                    focusTaskAtIndex(depIndex, { openDetail: true });
                 } else {
                     // Task not in current filtered list, fetch it
                     fetch('/api/task?project=' + encodeURIComponent(currentProject) + '&id=' + encodeURIComponent(depId))
