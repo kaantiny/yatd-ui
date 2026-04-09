@@ -29,14 +29,30 @@ A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaanti
 
 ## Installation
 
+### From release (recommended)
+
+Download the latest binary from [Releases](https://github.com/kaantiny/yatd-ui/releases):
+
 ```bash
-# Build
-go build -o yatd-ui .
-
-# Run directly
+# Download the latest release (replace with your OS/arch)
+curl -L -o yatd-ui https://github.com/kaantiny/yatd-ui/releases/latest/download/yatd-ui-linux-amd64
+chmod +x yatd-ui
 ./yatd-ui
+```
 
-# Or install as systemd service
+### From source
+
+```bash
+git clone https://github.com/kaantiny/yatd-ui.git
+cd yatd-ui
+go build -o yatd-ui .
+./yatd-ui
+```
+
+### As a systemd service
+
+```bash
+sudo cp yatd-ui /usr/local/bin/
 sudo cp yatd-ui.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now yatd-ui
