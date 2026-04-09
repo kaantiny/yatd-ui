@@ -61,6 +61,34 @@
             font-size: 14px;
             font-weight: 600;
             color: var(--accent);
+            flex: 1;
+        }
+
+        .sidebar-close-btn,
+        .sidebar-toggle-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-family: inherit;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .sidebar-close-btn:hover,
+        .sidebar-toggle-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .app.sidebar-hidden .sidebar {
+            display: none;
+        }
+
+        .app.sidebar-hidden .main {
+            width: 100%;
         }
 
         .projects-list {
@@ -705,6 +733,10 @@
                 display: block;
             }
 
+            .sidebar-toggle-btn {
+                display: none;
+            }
+
             .toolbar {
                 padding: 8px 12px;
                 flex-wrap: wrap;
@@ -963,6 +995,7 @@
         <aside class="sidebar" id="sidebar">
             <div class="header">
                 <h1>◈ yatd UI</h1>
+                <button class="sidebar-close-btn" id="sidebarCloseBtn" title="Close project sidebar">✕</button>
             </div>
             <div class="projects-list" id="projects"></div>
             <div class="help-bar">
@@ -970,6 +1003,7 @@
                 <div><kbd>Enter</kbd> View task</div>
                 <div><kbd>/</kbd> Search</div>
                 <div><kbd>t</kbd> Tree view</div>
+                <div><kbd>⌘/Ctrl</kbd><kbd>/</kbd> Toggle sidebar</div>
                 <div><kbd>Esc</kbd> Close/Back</div>
                 <div><kbd>?</kbd> Help</div>
             </div>
@@ -977,6 +1011,7 @@
         <main class="main">
             <div class="toolbar">
                 <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+                <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Toggle project sidebar">Projects</button>
                 <input type="text" class="search-box" id="search" placeholder="Search tasks... (/)" />
                 <div class="filter-bar">
                     <button class="filter-btn active" data-filter="all">all</button>
@@ -1008,6 +1043,7 @@
         <kbd>a</kbd> - Show all<br>
         <kbd>t</kbd> - Toggle tree view<br>
         <kbd>r</kbd> - Refresh<br>
+        <kbd>⌘/Ctrl</kbd> + <kbd>/</kbd> - Toggle project sidebar<br>
         <kbd>?</kbd> - Toggle this help
     </div>
 
@@ -1032,9 +1068,12 @@
         const taskDetailEl = document.getElementById('taskDetail');
         const searchEl = document.getElementById('search');
         const shortcutHintEl = document.getElementById('shortcutHint');
+        const appEl = document.querySelector('.app');
         const sidebarEl = document.getElementById('sidebar');
         const sidebarOverlayEl = document.getElementById('sidebarOverlay');
         const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
+        const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
         const nextBarContentEl = document.getElementById('nextBarContent');
 
         // Load projects
@@ -1577,8 +1616,19 @@
             return result.join('\n');
         }
 
+        function isSidebarToggleShortcut(event) {
+            const isSlash = event.key === '/' || event.code === 'Slash';
+            return isSlash && (event.metaKey || event.ctrlKey);
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
+            if (isSidebarToggleShortcut(e)) {
+                e.preventDefault();
+                toggleSidebar();
+                return;
+            }
+
             if (e.target === searchEl) {
                 if (e.key === 'Escape') {
                     searchEl.blur();
@@ -1677,18 +1727,44 @@
             toggleTreeMode();
         });
 
-        // Mobile menu toggle
+        function isMobileView() {
+            return window.matchMedia('(max-width: 768px)').matches;
+        }
+
+        // Sidebar controls (desktop + mobile)
         function openSidebar() {
-            sidebarEl.classList.add('open');
-            sidebarOverlayEl.classList.add('open');
+            if (isMobileView()) {
+                sidebarEl.classList.add('open');
+                sidebarOverlayEl.classList.add('open');
+                return;
+            }
+            appEl.classList.remove('sidebar-hidden');
         }
 
         function closeSidebar() {
-            sidebarEl.classList.remove('open');
-            sidebarOverlayEl.classList.remove('open');
+            if (isMobileView()) {
+                sidebarEl.classList.remove('open');
+                sidebarOverlayEl.classList.remove('open');
+                return;
+            }
+            appEl.classList.add('sidebar-hidden');
+        }
+
+        function toggleSidebar() {
+            if (isMobileView()) {
+                if (sidebarEl.classList.contains('open')) {
+                    closeSidebar();
+                } else {
+                    openSidebar();
+                }
+                return;
+            }
+            appEl.classList.toggle('sidebar-hidden');
         }
 
         mobileMenuBtn.addEventListener('click', openSidebar);
+        if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', closeSidebar);
+        if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', toggleSidebar);
         sidebarOverlayEl.addEventListener('click', closeSidebar);
 
         // Close sidebar when project selected on mobile
