@@ -48,20 +48,6 @@ The server listens on port 3000 by default. Set the `PORT` environment variable 
 PORT=8080 ./yatd-ui
 ```
 
-## Accessing via exe.dev
-
-To make the UI accessible via HTTPS:
-
-```bash
-# Set the proxy port (use 3000 or any port 3000-9999)
-ssh exe.dev share port yatdui 3000
-
-# Make it publicly accessible (no auth required)
-ssh exe.dev share set-public yatdui
-```
-
-Then access at: `https://yatdui.exe.xyz:3000/`
-
 ## Design
 
 - **TUI-inspired** - Dark theme with monospace fonts, minimal chrome
