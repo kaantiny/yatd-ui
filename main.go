@@ -181,7 +181,15 @@ func apiNext(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tasks)
 }
 
+var version = "dev"
+
 func main() {
+	// Handle --version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("yatd-ui", version)
+		os.Exit(0)
+	}
+
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
@@ -645,6 +653,109 @@ var tmpl = template.Must(template.New("main").Parse(`<!DOCTYPE html>
             line-height: 1.6;
             color: var(--text);
             white-space: pre-wrap;
+        }
+
+        .detail-description.markdown {
+            white-space: normal;
+        }
+
+        .detail-description.markdown h1,
+        .detail-description.markdown h2,
+        .detail-description.markdown h3,
+        .detail-description.markdown h4 {
+            margin: 16px 0 8px;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .detail-description.markdown h1 { font-size: 1.5em; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+        .detail-description.markdown h2 { font-size: 1.3em; }
+        .detail-description.markdown h3 { font-size: 1.1em; }
+        .detail-description.markdown h4 { font-size: 1em; }
+
+        .detail-description.markdown p {
+            margin: 8px 0;
+        }
+
+        .detail-description.markdown ul,
+        .detail-description.markdown ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .detail-description.markdown li {
+            margin: 4px 0;
+        }
+
+        .detail-description.markdown code {
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, monospace;
+            font-size: 0.9em;
+        }
+
+        .detail-description.markdown pre {
+            background: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .detail-description.markdown pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        .detail-description.markdown blockquote {
+            border-left: 3px solid var(--accent);
+            margin: 8px 0;
+            padding-left: 12px;
+            color: var(--text-muted);
+        }
+
+        .detail-description.markdown strong {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .detail-description.markdown em {
+            font-style: italic;
+            color: var(--text);
+        }
+
+        .detail-description.markdown a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .detail-description.markdown a:hover {
+            text-decoration: underline;
+        }
+
+        .detail-description.markdown hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 16px 0;
+        }
+
+        .detail-description.markdown table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0;
+        }
+
+        .detail-description.markdown th,
+        .detail-description.markdown td {
+            border: 1px solid var(--border);
+            padding: 6px 10px;
+            text-align: left;
+        }
+
+        .detail-description.markdown th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
         }
 
         .detail-list {
@@ -1144,7 +1255,7 @@ var tmpl = template.Must(template.New("main").Parse(`<!DOCTYPE html>
             if (task.description) {
                 html += '<div class="detail-section">';
                 html += '<div class="detail-section-title">Description</div>';
-                html += '<div class="detail-description">' + escapeHtml(task.description) + '</div>';
+                html += '<div class="detail-description markdown">' + renderMarkdown(task.description) + '</div>';
                 html += '</div>';
             }
 
@@ -1253,6 +1364,106 @@ var tmpl = template.Must(template.New("main").Parse(`<!DOCTYPE html>
         function formatDate(d) {
             if (!d) return '-';
             return new Date(d).toLocaleString();
+        }
+
+        // Simple markdown renderer
+        function renderMarkdown(text) {
+            if (!text) return '';
+
+            // Escape HTML first to prevent XSS
+            let html = escapeHtml(text);
+
+            // Headers (# ## ### ####)
+            html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+            // Code blocks (triple backticks)
+            html = html.replace(/` + "`" + "`" + `([^` + "`" + "`" + `]+)` + "`" + "`" + `/gim, '<pre><code>$1</code></pre>');
+
+            // Inline code (single backtick)  
+            html = html.replace(/` + "`" + `([^` + "`" + `]+)` + "`" + `/gim, '<code>$1</code>');
+
+            // Bold (**text**)
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            // Italic (*text* or _text_)
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+
+            // Strikethrough (~~text~~)
+            html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+
+            // Links [text](url)
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+            // Blockquote (> text)
+            html = html.replace(/^&gt; (.*$)/gim, '<blockquote>$1</blockquote>');
+
+            // Horizontal rule (--- or *** or ___)
+            html = html.replace(/^(---|\*\*\*|___)$/gim, '<hr>');
+
+            // Unordered lists (- item or * item)
+            html = html.replace(/^(\s*)[-*] (.*$)/gim, (match, indent, content) => {
+                const level = Math.floor(indent.length / 2);
+                return '<li>' + content + '</li>';
+            });
+
+            // Ordered lists (1. item)
+            html = html.replace(/^(\s*)\d+\. (.*$)/gim, (match, indent, content) => {
+                return '<li>' + content + '</li>';
+            });
+
+            // Tables (simplified - | col1 | col2 |)
+            html = html.replace(/\|(.+)\|/g, (match, content) => {
+                const cells = content.split('|').map(c => c.trim()).filter(c => c);
+                return '<tr>' + cells.map(c => '<td>' + c + '</td>').join('') + '</tr>';
+            });
+
+            // Line breaks - convert single newlines to <br>, double to <p>
+            const lines = html.split('\n');
+            const result = [];
+            let inList = false;
+            let inTable = false;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+
+                // Skip empty lines
+                if (!line) {
+                    if (inList) {
+                        result.push('</ul>');
+                        inList = false;
+                    }
+                    if (inTable) {
+                        result.push('</table>');
+                        inTable = false;
+                    }
+                    continue;
+                }
+
+                // Wrap paragraphs (text not inside other elements)
+                if (!line.match(/^(<h|<li|<blockquote|<pre|<hr|<tr|<table|<\/)/)) {
+                    if (!inList && lines[i].match(/^\s*[-*] /)) {
+                        result.push('<ul>');
+                        inList = true;
+                    }
+                    if (!line.match(/^<\w/)) {
+                        result.push('<p>' + line + '</p>');
+                    } else {
+                        result.push(line);
+                    }
+                } else {
+                    result.push(line);
+                }
+            }
+
+            if (inList) result.push('</ul>');
+            if (inTable) result.push('</table>');
+
+            return result.join('\n');
         }
 
         // Keyboard shortcuts
