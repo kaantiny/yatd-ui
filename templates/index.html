@@ -1008,6 +1008,7 @@
         let showHelp = false;
         let nextTasks = [];
         let treeMode = true;
+        let suppressAutoScrollOnce = false;
         const collapsedTreeNodesByProject = new Map();
 
         // DOM elements
@@ -1165,6 +1166,7 @@
             } else {
                 collapsed.add(taskId);
             }
+            suppressAutoScrollOnce = true;
             renderTasks();
         }
 
@@ -1319,11 +1321,14 @@
                 });
             }
 
-            // Auto-scroll to selected
-            const selected = taskListEl.querySelector('.task-item.selected');
-            if (selected) {
-                selected.scrollIntoView({ block: 'nearest' });
+            // Auto-scroll to selected unless explicitly suppressed (e.g. toggling tree node)
+            if (!suppressAutoScrollOnce) {
+                const selected = taskListEl.querySelector('.task-item.selected');
+                if (selected) {
+                    selected.scrollIntoView({ block: 'nearest' });
+                }
             }
+            suppressAutoScrollOnce = false;
         }
 
         // Render task detail
