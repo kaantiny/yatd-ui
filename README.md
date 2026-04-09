@@ -19,6 +19,7 @@ A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaanti
 |-----|--------|
 | `↑` / `↓` or `k` / `j` | Navigate tasks |
 | `Enter` | View task details |
+| `z` | Toggle selected task open/closed |
 | `Esc` | Close detail panel |
 | `/` | Focus search box |
 | `o` | Show open tasks only |

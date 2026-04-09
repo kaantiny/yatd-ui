@@ -1001,6 +1001,7 @@
             <div class="help-bar">
                 <div><kbd>↑</kbd><kbd>↓</kbd> Navigate</div>
                 <div><kbd>Enter</kbd> View task</div>
+                <div><kbd>z</kbd> Toggle open/closed</div>
                 <div><kbd>/</kbd> Search</div>
                 <div><kbd>t</kbd> Tree view</div>
                 <div><kbd>⌘/Ctrl</kbd><kbd>/</kbd> Toggle sidebar</div>
@@ -1036,6 +1037,7 @@
         <strong>Keyboard Shortcuts</strong><br>
         <kbd>j</kbd>/<kbd>k</kbd> or <kbd>↑</kbd>/<kbd>↓</kbd> - Navigate<br>
         <kbd>Enter</kbd> - View task details<br>
+        <kbd>z</kbd> - Toggle selected task open/closed<br>
         <kbd>Esc</kbd> - Close detail panel<br>
         <kbd>/</kbd> - Focus search<br>
         <kbd>o</kbd> - Show open only<br>
@@ -1117,6 +1119,42 @@
             const res = await fetch(url);
             const task = await res.json();
             renderTaskDetail(task);
+        }
+
+        // Toggle selected task status (open <-> closed)
+        async function toggleSelectedTaskStatus() {
+            const selectedTask = filteredTasks[selectedIndex];
+            if (!selectedTask) return;
+
+            const nextStatus = selectedTask.status === 'closed' ? 'open' : 'closed';
+            const url = '/api/task?project=' + encodeURIComponent(currentProject) + '&id=' + encodeURIComponent(selectedTask.id);
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: nextStatus })
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to update task status');
+            }
+
+            // Keep local data in sync so UI feels instant
+            const taskInAll = tasks.find(t => t.id === selectedTask.id);
+            if (taskInAll) taskInAll.status = nextStatus;
+            selectedTask.status = nextStatus;
+
+            if (currentFilter === 'all') {
+                renderTasks();
+            } else {
+                applyFilter({ keepSelection: true, preferredTaskId: selectedTask.id });
+            }
+
+            // Refresh detail panel if this task is currently shown
+            const detailIdEl = taskDetailEl.querySelector('.detail-id');
+            if (detailIdEl && detailIdEl.textContent === selectedTask.id) {
+                loadTaskDetail(selectedTask.id);
+            }
         }
 
         // Render projects
@@ -1477,7 +1515,10 @@
         }
 
         // Apply filters
-        function applyFilter() {
+        function applyFilter(options = {}) {
+            const { keepSelection = false, preferredTaskId = '' } = options;
+            const previousSelectedId = preferredTaskId || (keepSelection && filteredTasks[selectedIndex] ? filteredTasks[selectedIndex].id : '');
+
             filteredTasks = tasks.filter(t => {
                 if (currentFilter === 'open' && t.status !== 'open') return false;
                 if (currentFilter === 'closed' && t.status !== 'closed') return false;
@@ -1489,7 +1530,14 @@
                 }
                 return true;
             });
-            selectedIndex = 0;
+
+            if (keepSelection && previousSelectedId) {
+                const newIndex = filteredTasks.findIndex(t => t.id === previousSelectedId);
+                selectedIndex = newIndex >= 0 ? newIndex : 0;
+            } else {
+                selectedIndex = 0;
+            }
+
             renderTasks();
         }
 
@@ -1662,6 +1710,10 @@
                     if (filteredTasks[selectedIndex]) {
                         loadTaskDetail(filteredTasks[selectedIndex].id);
                     }
+                    break;
+                case 'z':
+                    e.preventDefault();
+                    toggleSelectedTaskStatus().catch(err => console.error(err));
                     break;
                 case 'Escape':
                     taskDetailEl.classList.remove('visible');
