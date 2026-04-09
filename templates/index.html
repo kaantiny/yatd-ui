@@ -821,6 +821,25 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--text-muted);
         }
+
+        /* Tree view styles */
+        .tree-connector {
+            color: var(--text-muted);
+            user-select: none;
+            white-space: pre;
+        }
+
+        .task-item.tree-depth-1 {
+            border-left: 3px solid var(--warning);
+        }
+
+        .task-item.tree-depth-2 {
+            border-left: 3px solid var(--danger);
+        }
+
+        .filter-btn.tree-btn {
+            margin-left: 4px;
+        }
     </style>
 </head>
 <body>
@@ -835,6 +854,7 @@
                 <div><kbd>↑</kbd><kbd>↓</kbd> Navigate</div>
                 <div><kbd>Enter</kbd> View task</div>
                 <div><kbd>/</kbd> Search</div>
+                <div><kbd>t</kbd> Tree view</div>
                 <div><kbd>Esc</kbd> Close/Back</div>
                 <div><kbd>?</kbd> Help</div>
             </div>
@@ -847,6 +867,7 @@
                     <button class="filter-btn active" data-filter="all">all</button>
                     <button class="filter-btn" data-filter="open">open</button>
                     <button class="filter-btn" data-filter="closed">closed</button>
+                    <button class="filter-btn tree-btn" id="treeModeBtn">tree</button>
                 </div>
             </div>
             <div class="content">
@@ -870,6 +891,7 @@
         <kbd>o</kbd> - Show open only<br>
         <kbd>c</kbd> - Show closed only<br>
         <kbd>a</kbd> - Show all<br>
+        <kbd>t</kbd> - Toggle tree view<br>
         <kbd>r</kbd> - Refresh<br>
         <kbd>?</kbd> - Toggle this help
     </div>
@@ -885,6 +907,7 @@
         let searchQuery = '';
         let showHelp = false;
         let nextTasks = [];
+        let treeMode = false;
 
         // DOM elements
         const projectsEl = document.getElementById('projects');
@@ -948,7 +971,81 @@
 
         // Render next task in the next bar
 
-        // Render task list
+        // Build dependency tree from filtered tasks
+        function buildDependencyTree(taskList) {
+            const taskMap = new Map();
+            const childrenMap = new Map();
+
+            // Index all tasks
+            taskList.forEach(t => {
+                taskMap.set(t.id, t);
+                childrenMap.set(t.id, []);
+            });
+
+            // Build reverse mapping: blocker -> tasks it blocks
+            taskList.forEach(t => {
+                if (t.blockers && t.blockers.length) {
+                    t.blockers.forEach(blockerId => {
+                        if (childrenMap.has(blockerId)) {
+                            childrenMap.get(blockerId).push(t);
+                        }
+                    });
+                }
+            });
+
+            // Root tasks: no blockers in the current filtered set
+            const roots = taskList.filter(t => {
+                if (!t.blockers || t.blockers.length === 0) return true;
+                return !t.blockers.some(b => taskMap.has(b));
+            });
+
+            const result = [];
+            const visited = new Set();
+
+            function dfs(task, depth, continuationPrefix, isLast) {
+                if (visited.has(task.id)) return;
+                visited.add(task.id);
+
+                let connector = '';
+                if (depth > 0) {
+                    connector = continuationPrefix + (isLast ? '└── ' : '├── ');
+                }
+
+                result.push({
+                    task: task,
+                    depth: depth,
+                    connector: connector
+                });
+
+                const children = (childrenMap.get(task.id) || []).filter(c => !visited.has(c.id));
+                const newContinuation = depth === 0 ? '' : continuationPrefix + (isLast ? '    ' : '│   ');
+
+                children.forEach((child, idx) => {
+                    dfs(child, depth + 1, newContinuation, idx === children.length - 1);
+                });
+            }
+
+            roots.forEach((root, idx) => {
+                dfs(root, 0, '', idx === roots.length - 1);
+            });
+
+            // Add any unvisited tasks (part of pure cycles)
+            taskList.forEach(t => {
+                if (!visited.has(t.id)) {
+                    dfs(t, 0, '', true);
+                }
+            });
+
+            return result;
+        }
+
+        // Toggle tree mode
+        function toggleTreeMode() {
+            treeMode = !treeMode;
+            updateFilterButtons();
+            applyFilter();
+        }
+
         // Render task list
         function renderTasks() {
             if (filteredTasks.length === 0) {
@@ -958,10 +1055,9 @@
 
             let html = '';
 
-            // Render the next task first (if available and not filtered out)
-            if (nextTasks && nextTasks.length > 0) {
+            // Render the next task first (if available and not filtered out, skip in tree mode)
+            if (!treeMode && nextTasks && nextTasks.length > 0) {
                 const nextTask = nextTasks[0];
-                // Find the full task data from filteredTasks
                 const nextTaskFull = filteredTasks.find(t => t.id === nextTask.id);
                 if (nextTaskFull) {
                     html += '<div class="next-task-item" data-id="' + nextTask.id + '">' +
@@ -979,21 +1075,54 @@
                 }
             }
 
-            // Render the rest of the tasks
-            html += filteredTasks.map((t, i) =>
-                '<div class="task-item ' + (i === selectedIndex ? 'selected' : '') + '" data-index="' + i + '" data-id="' + t.id + '">' +
-                '<div class="task-status ' + t.status + '"></div>' +
-                '<div class="task-content">' +
-                '<div class="task-title">' + escapeHtml(t.title) + '</div>' +
-                '<div class="task-meta">' +
-                '<span class="task-tag">' + t.id + '</span>' +
-                (t.priority ? '<span class="task-tag priority-' + t.priority + '">' + t.priority + '</span>' : '') +
-                (t.labels ? t.labels.map(l => '<span class="task-tag">' + l + '</span>').join('') : '') +
-                (t.blockers && t.blockers.length ? '<span class="task-tag">⛓ ' + t.blockers.length + '</span>' : '') +
-                '</div>' +
-                '</div>' +
-                '</div>'
-            ).join('');
+            if (treeMode) {
+                // Build tree and reorder filteredTasks to match tree order
+                const treeNodes = buildDependencyTree(filteredTasks);
+                // Replace filteredTasks with tree-ordered tasks so j/k nav follows tree order
+                const treeOrderedTasks = treeNodes.map(n => n.task);
+                // Preserve selectedIndex validity
+                if (selectedIndex >= treeOrderedTasks.length) {
+                    selectedIndex = Math.max(0, treeOrderedTasks.length - 1);
+                }
+                // Update filteredTasks to tree order
+                filteredTasks = treeOrderedTasks;
+
+                html += treeNodes.map((node, i) => {
+                    const t = node.task;
+                    const depth = node.depth;
+                    const depthClass = depth >= 2 ? 'tree-depth-2' : (depth === 1 ? 'tree-depth-1' : '');
+                    const paddingLeft = depth > 0 ? 'padding-left: ' + (12 + depth * 24) + 'px;' : '';
+                    const connectorHtml = node.connector ? '<span class="tree-connector">' + escapeHtml(node.connector) + '</span>' : '';
+
+                    return '<div class="task-item ' + (i === selectedIndex ? 'selected' : '') + ' ' + depthClass + '" data-index="' + i + '" data-id="' + t.id + '" style="' + paddingLeft + '">' +
+                        '<div class="task-status ' + t.status + '"></div>' +
+                        '<div class="task-content">' +
+                        '<div class="task-title">' + connectorHtml + escapeHtml(t.title) + '</div>' +
+                        '<div class="task-meta">' +
+                        '<span class="task-tag">' + t.id + '</span>' +
+                        (t.priority ? '<span class="task-tag priority-' + t.priority + '">' + t.priority + '</span>' : '') +
+                        (t.labels ? t.labels.map(l => '<span class="task-tag">' + l + '</span>').join('') : '') +
+                        '</div>' +
+                        '</div>' +
+                        '</div>';
+                }).join('');
+            } else {
+                // Flat list (original behavior)
+                html += filteredTasks.map((t, i) =>
+                    '<div class="task-item ' + (i === selectedIndex ? 'selected' : '') + '" data-index="' + i + '" data-id="' + t.id + '">' +
+                    '<div class="task-status ' + t.status + '"></div>' +
+                    '<div class="task-content">' +
+                    '<div class="task-title">' + escapeHtml(t.title) + '</div>' +
+                    '<div class="task-meta">' +
+                    '<span class="task-tag">' + t.id + '</span>' +
+                    (t.priority ? '<span class="task-tag priority-' + t.priority + '">' + t.priority + '</span>' : '') +
+                    (t.labels ? t.labels.map(l => '<span class="task-tag">' + l + '</span>').join('') : '') +
+                    (t.blockers && t.blockers.length ? '<span class="task-tag">⛓ ' + t.blockers.length + '</span>' : '') +
+                    '</div>' +
+                    '</div>' +
+                    '</div>'
+                ).join('');
+            }
 
             taskListEl.innerHTML = html;
 
@@ -1308,6 +1437,9 @@
                     updateFilterButtons();
                     applyFilter();
                     break;
+                case 't':
+                    toggleTreeMode();
+                    break;
                 case 'r':
                     loadTasks(currentProject);
                     break;
@@ -1326,17 +1458,25 @@
 
         // Filter buttons
         function updateFilterButtons() {
-            document.querySelectorAll('.filter-btn').forEach(btn => {
+            document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.filter === currentFilter);
             });
+            const treeModeBtn = document.getElementById('treeModeBtn');
+            if (treeModeBtn) {
+                treeModeBtn.classList.toggle('active', treeMode);
+            }
         }
 
-        document.querySelectorAll('.filter-btn').forEach(btn => {
+        document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentFilter = btn.dataset.filter;
                 updateFilterButtons();
                 applyFilter();
             });
+        });
+
+        document.getElementById('treeModeBtn').addEventListener('click', () => {
+            toggleTreeMode();
         });
 
         // Mobile menu toggle
