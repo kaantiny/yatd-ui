@@ -1,6 +1,6 @@
 # yatd UI
 
-A minimal, fast, TUI-inspired web interface for [yatd](https://git.secluded.site/yatd) - the CLI todo manager.
+A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaantiny/yatd) - the CLI todo manager.
 
 ## Features
 
