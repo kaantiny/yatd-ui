@@ -420,6 +420,29 @@
             font-size: 11px;
             color: var(--text-muted);
             flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .copy-id-btn {
+            margin-left: auto;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 4px;
+            padding: 1px 8px;
+            font-family: inherit;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .copy-id-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .copy-id-btn.copied {
+            border-color: var(--success);
+            color: var(--success);
         }
 
         .task-tag {
@@ -1060,6 +1083,7 @@
                 <div><kbd>z</kbd> Toggle open/closed</div>
                 <div><kbd>/</kbd> Search</div>
                 <div><kbd>t</kbd> Tree view</div>
+                <div><kbd>y</kbd> Copy selected task id</div>
                 <div><kbd>⌘/Ctrl</kbd><kbd>/</kbd> Toggle sidebar</div>
                 <div><kbd>Esc</kbd> Close/Back</div>
                 <div><kbd>?</kbd> Help</div>
@@ -1105,6 +1129,7 @@
         <kbd>c</kbd> - Show closed only<br>
         <kbd>a</kbd> - Show all<br>
         <kbd>t</kbd> - Toggle tree view<br>
+        <kbd>y</kbd> - Copy selected task id<br>
         <kbd>r</kbd> - Refresh<br>
         <kbd>⌘/Ctrl</kbd> + <kbd>/</kbd> - Toggle project sidebar<br>
         <kbd>?</kbd> - Toggle this help
@@ -1366,6 +1391,7 @@
                         (nextTaskFull.priority ? '<span class="task-tag priority-' + nextTaskFull.priority + '">' + nextTaskFull.priority + '</span>' : '') +
                         (nextTaskFull.effort ? '<span class="task-tag">' + nextTaskFull.effort + '</span>' : '') +
                         (nextTask.rank && nextTask.score ? '<span class="task-tag" style="color: #e3b341;">#' + nextTask.rank + ' · Score: ' + nextTask.score.toFixed(1) + '</span>' : '') +
+                        '<button type="button" class="copy-id-btn" data-copy-id="' + nextTask.id + '" title="Copy task id">copy</button>' +
                         '</div>' +
                         '</div>' +
                         '</div>';
@@ -1438,6 +1464,7 @@
                         '<span class="task-tag">' + t.id + '</span>' +
                         (t.priority ? '<span class="task-tag priority-' + t.priority + '">' + t.priority + '</span>' : '') +
                         (t.labels ? t.labels.map(l => '<span class="task-tag">' + l + '</span>').join('') : '') +
+                        '<button type="button" class="copy-id-btn" data-copy-id="' + t.id + '" title="Copy task id">copy</button>' +
                         '</div>' +
                         '</div>' +
                         '</div>';
@@ -1454,6 +1481,7 @@
                     (t.priority ? '<span class="task-tag priority-' + t.priority + '">' + t.priority + '</span>' : '') +
                     (t.labels ? t.labels.map(l => '<span class="task-tag">' + l + '</span>').join('') : '') +
                     (t.blockers && t.blockers.length ? '<span class="task-tag">⛓ ' + t.blockers.length + '</span>' : '') +
+                    '<button type="button" class="copy-id-btn" data-copy-id="' + t.id + '" title="Copy task id">copy</button>' +
                     '</div>' +
                     '</div>' +
                     '</div>'
@@ -1466,6 +1494,11 @@
             taskListEl.querySelectorAll('.task-item').forEach(el => {
                 el.addEventListener('click', (e) => {
                     if (e.target.closest('.tree-toggle')) {
+                        return;
+                    }
+                    if (e.target.closest('.copy-id-btn')) {
+                        const copyButton = e.target.closest('.copy-id-btn');
+                        copyTaskId(copyButton.dataset.copyId, copyButton);
                         return;
                     }
                     focusTaskAtIndex(parseInt(el.dataset.index), { openDetail: true });
@@ -1482,7 +1515,12 @@
             // Add click handler for next task
             const nextTaskEl = taskListEl.querySelector('.next-task-item');
             if (nextTaskEl) {
-                nextTaskEl.addEventListener('click', () => {
+                nextTaskEl.addEventListener('click', (e) => {
+                    if (e.target.closest('.copy-id-btn')) {
+                        const copyButton = e.target.closest('.copy-id-btn');
+                        copyTaskId(copyButton.dataset.copyId, copyButton);
+                        return;
+                    }
                     const nextId = nextTaskEl.dataset.id;
                     const nextIndex = filteredTasks.findIndex(t => t.id === nextId);
                     if (nextIndex !== -1) {
@@ -1777,6 +1815,41 @@
             }
         }
 
+        async function copyToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+                return;
+            }
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
+
+        async function copyTaskId(taskId, buttonEl) {
+            if (!taskId) return;
+            try {
+                await copyToClipboard(taskId);
+                if (buttonEl) {
+                    const prevLabel = buttonEl.textContent;
+                    buttonEl.textContent = 'copied';
+                    buttonEl.classList.add('copied');
+                    setTimeout(() => {
+                        buttonEl.textContent = prevLabel;
+                        buttonEl.classList.remove('copied');
+                    }, 900);
+                }
+            } catch (err) {
+                console.error('Failed to copy task id', err);
+            }
+        }
+
         function focusTaskAtIndex(index, options = {}) {
             const { openDetail = false } = options;
             if (index < 0 || index >= filteredTasks.length) return;
@@ -1803,6 +1876,12 @@
             const selectedTask = filteredTasks[selectedIndex];
             if (!selectedTask) return false;
             return allFilteredTasks.some(t => t.blockers && t.blockers.includes(selectedTask.id));
+        }
+
+        function copySelectedTaskId() {
+            const selectedTask = filteredTasks[selectedIndex];
+            if (!selectedTask) return;
+            copyTaskId(selectedTask.id);
         }
 
         // Keyboard shortcuts
@@ -1882,6 +1961,10 @@
                     break;
                 case 't':
                     toggleTreeMode();
+                    break;
+                case 'y':
+                    e.preventDefault();
+                    copySelectedTaskId();
                     break;
                 case 'r':
                     loadTasks(currentProject);
