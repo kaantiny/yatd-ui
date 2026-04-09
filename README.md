@@ -4,6 +4,12 @@ A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaanti
 
 ![yatd UI screenshot](screenshot.png)
 
+### DAG View
+
+Visualize task dependencies as a directed acyclic graph. Select a node to highlight its ancestor and descendant chains.
+
+![yatd UI DAG view](screenshot-dag.png)
+
 ## Features
 
 - **Project browsing** - View all your yatd projects
@@ -11,6 +17,7 @@ A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaanti
 - **Task details** - Full task view including description, labels, dependencies, work log, and timestamps
 - **Search** - Real-time search by title, description, or task ID
 - **Filters** - Filter by status (all/open/closed)
+- **DAG view** - Visualize task blocker relationships as a dependency graph
 - **Keyboard navigation** - Full keyboard support for power users
 
 ## Keyboard Shortcuts
@@ -28,6 +35,7 @@ A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaanti
 | `c` | Show closed tasks only |
 | `a` | Show all tasks |
 | `t` | Toggle tree view |
+| `d` | Toggle DAG view |
 | `r` | Refresh data |
 | `Cmd/Ctrl + /` | Toggle project sidebar |
 | `?` | Toggle help |
