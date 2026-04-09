@@ -1055,6 +1055,7 @@
         let currentProject = '';
         let tasks = [];
         let filteredTasks = [];
+        let allFilteredTasks = []; // full filtered list before tree reordering
         let selectedIndex = 0;
         let currentFilter = 'all';
         let searchQuery = '';
@@ -1221,6 +1222,16 @@
                 });
 
                 if (collapsed.has(task.id)) {
+                    // Mark all descendants as visited so they disappear from the list
+                    function markDescendants(id) {
+                        (childrenMap.get(id) || []).forEach(child => {
+                            if (!visited.has(child.id)) {
+                                visited.add(child.id);
+                                markDescendants(child.id);
+                            }
+                        });
+                    }
+                    markDescendants(task.id);
                     return;
                 }
 
@@ -1302,8 +1313,8 @@
             taskListEl.classList.toggle('tree-active', treeMode);
 
             if (treeMode) {
-                // Build tree and reorder filteredTasks to match tree order
-                const treeNodes = buildDependencyTree(filteredTasks);
+                // Build tree from the full filtered list (not the tree-reordered one)
+                const treeNodes = buildDependencyTree(allFilteredTasks);
                 // Replace filteredTasks with tree-ordered tasks so j/k nav follows tree order
                 const treeOrderedTasks = treeNodes.map(n => n.task);
                 // Preserve selectedIndex validity
@@ -1530,6 +1541,7 @@
                 }
                 return true;
             });
+            allFilteredTasks = filteredTasks.slice(); // preserve full list before tree reordering
 
             if (keepSelection && previousSelectedId) {
                 const newIndex = filteredTasks.findIndex(t => t.id === previousSelectedId);
