@@ -941,11 +941,18 @@
         // Load tasks for project
         async function loadTasks(project) {
             const url = project ? '/api/tasks?project=' + encodeURIComponent(project) : '/api/tasks';
-            const res = await fetch(url);
-            tasks = await res.json();
+            const nextUrl = project ? '/api/next?project=' + encodeURIComponent(project) : '/api/next';
+
+            // Fetch both tasks and next tasks in parallel
+            const [tasksRes, nextRes] = await Promise.all([
+                fetch(url),
+                fetch(nextUrl)
+            ]);
+
+            tasks = await tasksRes.json();
+            nextTasks = await nextRes.json();
+
             applyFilter();
-            // Also load next tasks
-            loadNext(project);
         }
 
         // Load task details
