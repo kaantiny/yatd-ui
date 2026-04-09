@@ -2,10 +2,12 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"fmt"
 	"html/template"
 	"net/http"
 	"os"
+	"runtime/debug"
 
 	"yatd-ui/internal/handlers"
 )
@@ -17,6 +19,20 @@ var tmpl *template.Template
 
 var version = "dev"
 
+func resolvedVersion() string {
+	if version != "dev" {
+		return version
+	}
+
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+			return info.Main.Version
+		}
+	}
+
+	return version
+}
+
 func init() {
 	var err error
 	tmpl, err = template.ParseFS(templateFS, "templates/*.html")
@@ -26,7 +42,16 @@ func init() {
 }
 
 func main() {
-	fmt.Printf("yatd UI %s starting...\n", version)
+	v := resolvedVersion()
+
+	showVersion := flag.Bool("version", false, "print version")
+	flag.Parse()
+	if *showVersion {
+		fmt.Printf("%s\n", v)
+		return
+	}
+
+	fmt.Printf("yatd UI %s starting...\n", v)
 
 	port := os.Getenv("PORT")
 	if port == "" {

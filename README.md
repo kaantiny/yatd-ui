@@ -60,7 +60,7 @@ sudo systemctl enable --now yatd-ui
 
 ## Configuration
 
-The server listens on port 3000 by default. Set the `PORT` environment variable to change:
+The server listens on port 8080 by default. Set the `PORT` environment variable to change:
 
 ```bash
 PORT=8080 ./yatd-ui
@@ -72,3 +72,13 @@ PORT=8080 ./yatd-ui
 - **Fast** - Single binary, no dependencies, loads instantly
 - **Keyboard-first** - All actions accessible via keyboard shortcuts
 - **Extensible** - Easy to add new keyboard shortcuts and features
+
+## Version
+
+Print version:
+
+```bash
+./yatd-ui --version
+```
+
+Release builds embed the GitHub tag (for example `v0.1.2`). Local/source builds without linker flags show `dev`.
