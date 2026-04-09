@@ -1066,6 +1066,128 @@
             border-color: rgba(88, 166, 255, 0.7);
             background: rgba(88, 166, 255, 0.08);
         }
+
+        /* DAG view styles */
+        .dag-container {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+            display: none;
+        }
+
+        .dag-container.visible {
+            display: block;
+        }
+
+        .dag-canvas {
+            position: relative;
+            min-width: 100%;
+            min-height: 100%;
+        }
+
+        .dag-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .dag-edge {
+            fill: none;
+            stroke: var(--border);
+            stroke-width: 1.5;
+        }
+
+        .dag-edge-head {
+            fill: var(--border);
+            stroke: none;
+        }
+
+        .dag-node {
+            position: absolute;
+            width: 220px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: border-color 0.1s, box-shadow 0.1s;
+            z-index: 2;
+        }
+
+        .dag-node:hover {
+            border-color: var(--accent);
+        }
+
+        .dag-node.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent);
+        }
+
+        .dag-node.status-closed {
+            opacity: 0.55;
+        }
+
+        .dag-node-title {
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+
+        .dag-node-meta {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .dag-node-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dag-node-status.open { background: var(--success); }
+        .dag-node-status.closed { background: var(--text-muted); }
+
+        .dag-node-id {
+            background: var(--bg-tertiary);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .dag-node-priority {
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: var(--bg-tertiary);
+        }
+
+        .dag-node-priority.priority-high { color: var(--danger); }
+        .dag-node-priority.priority-medium { color: var(--warning); }
+        .dag-node-priority.priority-low { color: var(--info); }
+
+        /* Highlighted edges when a node is selected */
+        .dag-edge.highlighted {
+            stroke: var(--accent);
+            stroke-width: 2;
+        }
+
+        .dag-edge-head.highlighted {
+            fill: var(--accent);
+        }
+
+        .dag-node.dag-node-ancestor {
+            border-color: rgba(227, 179, 65, 0.6);
+        }
+
+        .dag-node.dag-node-descendant {
+            border-color: rgba(86, 211, 100, 0.6);
+        }
     </style>
 </head>
 <body>
@@ -1083,6 +1205,7 @@
                 <div><kbd>z</kbd> Toggle open/closed</div>
                 <div><kbd>/</kbd> Search</div>
                 <div><kbd>t</kbd> Tree view</div>
+                <div><kbd>d</kbd> DAG view</div>
                 <div><kbd>y</kbd> Copy selected task id</div>
                 <div><kbd>⌘/Ctrl</kbd><kbd>/</kbd> Toggle sidebar</div>
                 <div><kbd>Esc</kbd> Close/Back</div>
@@ -1102,10 +1225,14 @@
                     <button class="filter-btn" data-filter="open">open</button>
                     <button class="filter-btn" data-filter="closed">closed</button>
                     <button class="filter-btn tree-btn active" id="treeModeBtn">tree</button>
+                    <button class="filter-btn tree-btn" id="dagModeBtn">dag</button>
                 </div>
             </div>
             <div class="content">
                 <div class="task-list" id="taskList"></div>
+                <div class="dag-container" id="dagContainer">
+                    <div class="dag-canvas" id="dagCanvas"></div>
+                </div>
                 <div class="task-detail" id="taskDetail">
                     <div class="empty-state">
                         <div class="empty-state-icon">📋</div>
@@ -1129,6 +1256,7 @@
         <kbd>c</kbd> - Show closed only<br>
         <kbd>a</kbd> - Show all<br>
         <kbd>t</kbd> - Toggle tree view<br>
+        <kbd>d</kbd> - Toggle DAG view<br>
         <kbd>y</kbd> - Copy selected task id<br>
         <kbd>r</kbd> - Refresh<br>
         <kbd>⌘/Ctrl</kbd> + <kbd>/</kbd> - Toggle project sidebar<br>
@@ -1148,6 +1276,7 @@
         let showHelp = false;
         let nextTasks = [];
         let treeMode = true;
+        let dagMode = false;
         let suppressAutoScrollOnce = false;
         const collapsedTreeNodesByProject = new Map();
 
@@ -1166,6 +1295,8 @@
         const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
         const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
         const nextBarContentEl = document.getElementById('nextBarContent');
+        const dagContainerEl = document.getElementById('dagContainer');
+        const dagCanvasEl = document.getElementById('dagCanvas');
 
         // Load projects
         async function loadProjects() {
@@ -1361,11 +1492,253 @@
             renderTasks();
         }
 
+        // ── DAG Layout & Rendering ──
+        const DAG_NODE_W = 220;
+        const DAG_NODE_H = 56;
+        const DAG_GAP_X = 40;
+        const DAG_GAP_Y = 80;
+        const DAG_PAD = 40;
+
+        function layoutDAG(taskList) {
+            const taskMap = new Map();
+            taskList.forEach(t => taskMap.set(t.id, t));
+
+            // Build adjacency: blocker → blocked (edges go from blocker to the task it blocks)
+            const outEdges = new Map(); // blocker -> [blocked ids]
+            const inEdges = new Map();  // blocked -> [blocker ids]
+            taskList.forEach(t => {
+                outEdges.set(t.id, []);
+                inEdges.set(t.id, []);
+            });
+            taskList.forEach(t => {
+                if (t.blockers) {
+                    t.blockers.forEach(b => {
+                        if (taskMap.has(b)) {
+                            outEdges.get(b).push(t.id);
+                            inEdges.get(t.id).push(b);
+                        }
+                    });
+                }
+            });
+
+            // Assign layers using longest-path (topological)
+            const layers = new Map();
+            const visited = new Set();
+            function assignLayer(id) {
+                if (visited.has(id)) return layers.get(id) || 0;
+                visited.add(id);
+                const deps = inEdges.get(id) || [];
+                let maxParentLayer = -1;
+                deps.forEach(d => {
+                    maxParentLayer = Math.max(maxParentLayer, assignLayer(d));
+                });
+                const layer = maxParentLayer + 1;
+                layers.set(id, layer);
+                return layer;
+            }
+            taskList.forEach(t => assignLayer(t.id));
+
+            // Group by layer
+            const layerGroups = [];
+            layers.forEach((layer, id) => {
+                while (layerGroups.length <= layer) layerGroups.push([]);
+                layerGroups[layer].push(id);
+            });
+
+            // Barycenter ordering: for layers > 0, sort by avg x of parents in previous layer
+            const positions = new Map(); // id -> index within layer
+            if (layerGroups.length > 0) {
+                layerGroups[0].forEach((id, i) => positions.set(id, i));
+            }
+            for (let l = 1; l < layerGroups.length; l++) {
+                const group = layerGroups[l];
+                group.forEach(id => {
+                    const parents = (inEdges.get(id) || []).filter(p => layers.get(p) === l - 1);
+                    if (parents.length > 0) {
+                        const avg = parents.reduce((s, p) => s + (positions.get(p) || 0), 0) / parents.length;
+                        positions.set(id, avg);
+                    } else {
+                        positions.set(id, 0);
+                    }
+                });
+                group.sort((a, b) => (positions.get(a) || 0) - (positions.get(b) || 0));
+                group.forEach((id, i) => positions.set(id, i));
+            }
+
+            // Compute x,y coords
+            const nodes = [];
+            const maxPerLayer = Math.max(...layerGroups.map(g => g.length), 1);
+            layerGroups.forEach((group, l) => {
+                const layerWidth = group.length * (DAG_NODE_W + DAG_GAP_X) - DAG_GAP_X;
+                const startX = DAG_PAD + (maxPerLayer * (DAG_NODE_W + DAG_GAP_X) - DAG_GAP_X - layerWidth) / 2;
+                group.forEach((id, i) => {
+                    const t = taskMap.get(id);
+                    nodes.push({
+                        id, title: t.title, status: t.status, priority: t.priority,
+                        effort: t.effort, labels: t.labels,
+                        x: startX + i * (DAG_NODE_W + DAG_GAP_X),
+                        y: DAG_PAD + l * (DAG_NODE_H + DAG_GAP_Y),
+                        layer: l
+                    });
+                });
+            });
+
+            const nodeMap = new Map();
+            nodes.forEach(n => nodeMap.set(n.id, n));
+
+            // Build edges with bezier control points
+            const edges = [];
+            taskList.forEach(t => {
+                if (t.blockers) {
+                    t.blockers.forEach(b => {
+                        if (nodeMap.has(b) && nodeMap.has(t.id)) {
+                            const src = nodeMap.get(b);
+                            const dst = nodeMap.get(t.id);
+                            const x1 = src.x + DAG_NODE_W / 2;
+                            const y1 = src.y + DAG_NODE_H;
+                            const x2 = dst.x + DAG_NODE_W / 2;
+                            const y2 = dst.y;
+                            const cy = (y1 + y2) / 2;
+                            edges.push({ from: b, to: t.id, x1, y1, x2, y2, cy });
+                        }
+                    });
+                }
+            });
+
+            const totalW = maxPerLayer * (DAG_NODE_W + DAG_GAP_X) - DAG_GAP_X + DAG_PAD * 2;
+            const totalH = layerGroups.length * (DAG_NODE_H + DAG_GAP_Y) - DAG_GAP_Y + DAG_PAD * 2;
+
+            return { nodes, edges, width: totalW, height: totalH };
+        }
+
+        let dagSelectedId = null;
+
+        function renderDAG() {
+            if (!dagMode) return;
+
+            const layout = layoutDAG(allFilteredTasks);
+            dagCanvasEl.style.width = layout.width + 'px';
+            dagCanvasEl.style.height = layout.height + 'px';
+
+            // Build connected set for highlighting
+            const ancestorIds = new Set();
+            const descendantIds = new Set();
+            if (dagSelectedId) {
+                // Walk up blockers
+                function walkUp(id) {
+                    const t = allFilteredTasks.find(t => t.id === id);
+                    if (t && t.blockers) {
+                        t.blockers.forEach(b => {
+                            if (!ancestorIds.has(b) && allFilteredTasks.some(x => x.id === b)) {
+                                ancestorIds.add(b);
+                                walkUp(b);
+                            }
+                        });
+                    }
+                }
+                walkUp(dagSelectedId);
+                // Walk down dependents
+                function walkDown(id) {
+                    allFilteredTasks.forEach(t => {
+                        if (t.blockers && t.blockers.includes(id) && !descendantIds.has(t.id)) {
+                            descendantIds.add(t.id);
+                            walkDown(t.id);
+                        }
+                    });
+                }
+                walkDown(dagSelectedId);
+            }
+
+            // SVG for edges
+            let svg = '<svg class="dag-svg" width="' + layout.width + '" height="' + layout.height + '" xmlns="http://www.w3.org/2000/svg">';
+            layout.edges.forEach(e => {
+                const hl = dagSelectedId && (
+                    (e.from === dagSelectedId || e.to === dagSelectedId) ||
+                    (ancestorIds.has(e.from) && (ancestorIds.has(e.to) || e.to === dagSelectedId)) ||
+                    (descendantIds.has(e.to) && (descendantIds.has(e.from) || e.from === dagSelectedId))
+                );
+                const cls = 'dag-edge' + (hl ? ' highlighted' : '');
+                const hcls = 'dag-edge-head' + (hl ? ' highlighted' : '');
+                svg += '<path class="' + cls + '" d="M' + e.x1 + ',' + e.y1 + ' C' + e.x1 + ',' + e.cy + ' ' + e.x2 + ',' + e.cy + ' ' + e.x2 + ',' + e.y2 + '"/>';
+                // Arrowhead
+                const ax = e.x2, ay = e.y2;
+                svg += '<polygon class="' + hcls + '" points="' + (ax - 4) + ',' + (ay - 8) + ' ' + ax + ',' + ay + ' ' + (ax + 4) + ',' + (ay - 8) + '"/>';
+            });
+            svg += '</svg>';
+
+            // Nodes
+            let nodesHtml = svg;
+            layout.nodes.forEach(n => {
+                const selClass = n.id === dagSelectedId ? ' selected' : '';
+                const statusClass = n.status === 'closed' ? ' status-closed' : '';
+                const relClass = (dagSelectedId && ancestorIds.has(n.id)) ? ' dag-node-ancestor' :
+                                 (dagSelectedId && descendantIds.has(n.id)) ? ' dag-node-descendant' : '';
+                nodesHtml += '<div class="dag-node' + selClass + statusClass + relClass + '" data-dag-id="' + n.id + '" style="left:' + n.x + 'px;top:' + n.y + 'px;">';
+                nodesHtml += '<div class="dag-node-title">' + escapeHtml(n.title) + '</div>';
+                nodesHtml += '<div class="dag-node-meta">';
+                nodesHtml += '<div class="dag-node-status ' + n.status + '"></div>';
+                nodesHtml += '<span class="dag-node-id">' + n.id + '</span>';
+                if (n.priority) nodesHtml += '<span class="dag-node-priority priority-' + n.priority + '">' + n.priority + '</span>';
+                nodesHtml += '</div>';
+                nodesHtml += '</div>';
+            });
+
+            dagCanvasEl.innerHTML = nodesHtml;
+
+            // Click handlers on nodes
+            dagCanvasEl.querySelectorAll('.dag-node').forEach(el => {
+                el.addEventListener('click', () => {
+                    const id = el.dataset.dagId;
+                    if (dagSelectedId === id) {
+                        // Double-click behavior: open detail
+                        loadTaskDetail(id);
+                    } else {
+                        dagSelectedId = id;
+                        renderDAG();
+                        loadTaskDetail(id);
+                    }
+                });
+            });
+
+            // Scroll selected into view
+            if (dagSelectedId) {
+                const selEl = dagCanvasEl.querySelector('.dag-node.selected');
+                if (selEl) selEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
+        }
+
+        // Toggle DAG mode
+        function toggleDagMode() {
+            if (dagMode) {
+                dagMode = false;
+            } else {
+                dagMode = true;
+                treeMode = false;
+            }
+            updateViewMode();
+        }
+
         // Toggle tree mode
         function toggleTreeMode() {
-            treeMode = !treeMode;
+            if (treeMode) {
+                treeMode = false;
+            } else {
+                treeMode = true;
+                dagMode = false;
+            }
+            updateViewMode();
+        }
+
+        function updateViewMode() {
+            // Show/hide containers
+            taskListEl.style.display = dagMode ? 'none' : '';
+            dagContainerEl.classList.toggle('visible', dagMode);
             updateFilterButtons();
-            applyFilter();
+            if (dagMode) {
+                renderDAG();
+            } else {
+                applyFilter();
+            }
         }
 
         // Render task list
@@ -1656,7 +2029,11 @@
                 selectedIndex = 0;
             }
 
-            renderTasks();
+            if (dagMode) {
+                renderDAG();
+            } else {
+                renderTasks();
+            }
         }
 
         // Select project
@@ -1962,6 +2339,9 @@
                 case 't':
                     toggleTreeMode();
                     break;
+                case 'd':
+                    toggleDagMode();
+                    break;
                 case 'y':
                     e.preventDefault();
                     copySelectedTaskId();
@@ -1998,6 +2378,10 @@
             if (treeModeBtn) {
                 treeModeBtn.classList.toggle('active', treeMode);
             }
+            const dagModeBtn = document.getElementById('dagModeBtn');
+            if (dagModeBtn) {
+                dagModeBtn.classList.toggle('active', dagMode);
+            }
         }
 
         document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
@@ -2010,6 +2394,10 @@
 
         document.getElementById('treeModeBtn').addEventListener('click', () => {
             toggleTreeMode();
+        });
+
+        document.getElementById('dagModeBtn').addEventListener('click', () => {
+            toggleDagMode();
         });
 
         function isMobileView() {
