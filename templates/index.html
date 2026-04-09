@@ -1096,7 +1096,7 @@
         <strong>Keyboard Shortcuts</strong><br>
         <kbd>j</kbd>/<kbd>k</kbd> or <kbd>↑</kbd>/<kbd>↓</kbd> - Navigate<br>
         <kbd>Enter</kbd> - View task details<br>
-        <kbd>z</kbd> - Toggle selected task open/closed<br>
+        <kbd>z</kbd> - Collapse/expand selected tree node (or toggle open/closed in flat mode)<br>
         <kbd>Esc</kbd> - Blur search (when focused)<br>
         <kbd>\</kbd> - Close detail panel<br>
         <kbd>/</kbd> - Focus search<br>
@@ -1799,6 +1799,12 @@
             focusTaskAtIndex(selectedIndex + delta);
         }
 
+        function selectedTaskHasChildren() {
+            const selectedTask = filteredTasks[selectedIndex];
+            if (!selectedTask) return false;
+            return allFilteredTasks.some(t => t.blockers && t.blockers.includes(selectedTask.id));
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (isSidebarToggleShortcut(e)) {
@@ -1835,7 +1841,14 @@
                     break;
                 case 'z':
                     e.preventDefault();
-                    toggleSelectedTaskStatus().catch(err => console.error(err));
+                    if (treeMode && selectedTaskHasChildren()) {
+                        const selectedTask = filteredTasks[selectedIndex];
+                        if (selectedTask) {
+                            toggleTreeNode(selectedTask.id);
+                        }
+                    } else {
+                        toggleSelectedTaskStatus().catch(err => console.error(err));
+                    }
                     break;
                 case '\\':
                     e.preventDefault();
