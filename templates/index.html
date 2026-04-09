@@ -823,18 +823,80 @@
         }
 
         /* Tree view styles */
-        .tree-connector {
-            color: var(--text-muted);
+        .task-list.tree-active .task-item {
+            margin-bottom: 0;
+            border-radius: 0;
+            border-bottom: none;
+        }
+
+        .task-list.tree-active .task-item:first-child {
+            border-radius: 6px 6px 0 0;
+        }
+
+        .task-list.tree-active .task-item:last-child {
+            border-radius: 0 0 6px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .task-list.tree-active .task-item:only-child {
+            border-radius: 6px;
+        }
+
+        .tree-node {
+            position: relative;
+            overflow: visible;
+        }
+
+        .tree-guides {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            pointer-events: none;
             user-select: none;
-            white-space: pre;
+            z-index: 1;
         }
 
-        .task-item.tree-depth-1 {
-            border-left: 3px solid var(--warning);
+        /* Vertical indent guide line */
+        .tree-guide-vert {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(139, 148, 158, 0.35);
         }
 
-        .task-item.tree-depth-2 {
-            border-left: 3px solid var(--danger);
+        /* Elbow: vertical from top to center, then horizontal to content */
+        .tree-guide-elbow {
+            position: absolute;
+            top: 0;
+            width: 1px;
+            background: transparent;
+        }
+
+        /* The actual L-shape via border */
+        .tree-guide-elbow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 10px;
+            height: 100%;
+            border-left: 1px solid rgba(139, 148, 158, 0.35);
+            border-bottom: 1px solid rgba(139, 148, 158, 0.35);
+            border-bottom-left-radius: 6px;
+        }
+
+        /* Gap before root-level tree groups (except first) */
+        .tree-root-gap {
+            margin-top: 8px !important;
+            border-radius: 6px 6px 0 0 !important;
+        }
+
+        /* Last item before a root gap needs bottom rounding */
+        .tree-root-gap-before {
+            border-radius: 0 0 6px 6px !important;
+            border-bottom: 1px solid var(--border) !important;
         }
 
         .filter-btn.tree-btn {
@@ -1009,37 +1071,33 @@
             const result = [];
             const visited = new Set();
 
-            function dfs(task, depth, continuationPrefix, isLast) {
+            function dfs(task, depth, activeGuides, isLast) {
                 if (visited.has(task.id)) return;
                 visited.add(task.id);
-
-                let connector = '';
-                if (depth > 0) {
-                    connector = continuationPrefix + (isLast ? '└── ' : '├── ');
-                }
 
                 result.push({
                     task: task,
                     depth: depth,
-                    connector: connector
+                    isLast: isLast,
+                    guides: activeGuides.slice() // which depth levels have a continuing vertical line
                 });
 
                 const children = (childrenMap.get(task.id) || []).filter(c => !visited.has(c.id));
-                const newContinuation = depth === 0 ? '' : continuationPrefix + (isLast ? '    ' : '│   ');
+                const newGuides = depth === 0 ? [] : activeGuides.concat(isLast ? [] : [depth]);
 
                 children.forEach((child, idx) => {
-                    dfs(child, depth + 1, newContinuation, idx === children.length - 1);
+                    dfs(child, depth + 1, newGuides, idx === children.length - 1);
                 });
             }
 
             roots.forEach((root, idx) => {
-                dfs(root, 0, '', idx === roots.length - 1);
+                dfs(root, 0, [], idx === roots.length - 1);
             });
 
             // Add any unvisited tasks (part of pure cycles)
             taskList.forEach(t => {
                 if (!visited.has(t.id)) {
-                    dfs(t, 0, '', true);
+                    dfs(t, 0, [], true);
                 }
             });
 
@@ -1082,6 +1140,9 @@
                 }
             }
 
+            // Toggle tree layout class
+            taskListEl.classList.toggle('tree-active', treeMode);
+
             if (treeMode) {
                 // Build tree and reorder filteredTasks to match tree order
                 const treeNodes = buildDependencyTree(filteredTasks);
@@ -1094,17 +1155,46 @@
                 // Update filteredTasks to tree order
                 filteredTasks = treeOrderedTasks;
 
+                const guideStep = 20; // px per depth level
+                const baseLeft = 24; // px from card left edge to first guide line
+                const elbowWidth = 10; // horizontal branch length
+
                 html += treeNodes.map((node, i) => {
                     const t = node.task;
                     const depth = node.depth;
-                    const depthClass = depth >= 2 ? 'tree-depth-2' : (depth === 1 ? 'tree-depth-1' : '');
-                    const paddingLeft = depth > 0 ? 'padding-left: ' + (12 + depth * 24) + 'px;' : '';
-                    const connectorHtml = node.connector ? '<span class="tree-connector">' + escapeHtml(node.connector) + '</span>' : '';
+                    const paddingLeft = depth > 0 ? 'padding-left: ' + (12 + depth * guideStep) + 'px;' : '';
 
-                    return '<div class="task-item ' + (i === selectedIndex ? 'selected' : '') + ' ' + depthClass + '" data-index="' + i + '" data-id="' + t.id + '" style="' + paddingLeft + '">' +
+                    // Build guide lines HTML
+                    let guidesHtml = '';
+                    if (depth > 0) {
+                        // Vertical continuation lines for ancestor depths
+                        node.guides.forEach(d => {
+                            const x = baseLeft + (d - 1) * guideStep;
+                            guidesHtml += '<div class="tree-guide-vert" style="left:' + x + 'px"></div>';
+                        });
+
+                        // Elbow at current depth: vertical from top to 50%, then horizontal
+                        const elbowX = baseLeft + (depth - 1) * guideStep;
+                        guidesHtml += '<div class="tree-guide-elbow" style="left:' + elbowX + 'px;height:50%"></div>';
+
+                        // If not last child, continue vertical line for this depth
+                        if (!node.isLast) {
+                            guidesHtml += '<div class="tree-guide-vert" style="left:' + elbowX + 'px"></div>';
+                        }
+                    }
+
+                    // Add gap classes for root items (new tree groups)
+                    const isRoot = depth === 0;
+                    const rootGapClass = (isRoot && i > 0) ? ' tree-root-gap' : '';
+                    // Add bottom rounding to last item before a root gap
+                    const nextNode = treeNodes[i + 1];
+                    const beforeGapClass = (nextNode && nextNode.depth === 0 && i > 0) ? ' tree-root-gap-before' : '';
+
+                    return '<div class="task-item tree-node' + rootGapClass + beforeGapClass + ' ' + (i === selectedIndex ? 'selected' : '') + '" data-index="' + i + '" data-id="' + t.id + '" style="' + paddingLeft + '">' +
+                        (guidesHtml ? '<div class="tree-guides">' + guidesHtml + '</div>' : '') +
                         '<div class="task-status ' + t.status + '"></div>' +
                         '<div class="task-content">' +
-                        '<div class="task-title">' + connectorHtml + escapeHtml(t.title) + '</div>' +
+                        '<div class="task-title">' + escapeHtml(t.title) + '</div>' +
                         '<div class="task-meta">' +
                         '<span class="task-tag">' + t.id + '</span>' +
                         (t.priority ? '<span class="task-tag priority-' + t.priority + '">' + t.priority + '</span>' : '') +
