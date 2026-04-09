@@ -4,10 +4,6 @@ A minimal, fast, TUI-inspired web interface for [yatd](https://github.com/kaanti
 
 ![yatd UI screenshot](screenshot.png)
 
-### DAG View
-
-Visualize task dependencies as a directed acyclic graph. Select a node to highlight its ancestor and descendant chains.
-
 ![yatd UI DAG view](screenshot-dag.png)
 
 ## Features
